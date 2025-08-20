@@ -1,0 +1,257 @@
+<!doctype html>
+<html>
+<head>
+    <title>What Should I Watch?</title>
+    <style>
+        .tag { margin:0 5px; background:#eee; padding:2px 5px; border-radius:3px; }
+        .remove { margin-left:5px; cursor:pointer; }
+        .flex-row { display:flex; align-items:center; flex-wrap:wrap; }
+        .multiselect { position:relative; }
+        .options {
+            display:none; position:absolute; background:white;
+            border:1px solid #ccc; max-height:200px; overflow:auto;
+            width:200px; z-index:1;
+        }
+        .option { padding:5px; cursor:pointer; }
+        .option.disabled { opacity:0.5; pointer-events:none; }
+        .option:hover { background:#f0f0f0; }
+        .close-btn { cursor:pointer; float:right; }
+    </style>
+    <script>
+        // close dropdown on outside click
+        document.addEventListener('click', function(e) {
+            var opt = document.getElementById('service-options');
+            var toggle = document.querySelector("[data-toggle='service-options']");
+            if (opt && opt.style.display==='block' &&
+                !opt.contains(e.target) && (!toggle || !toggle.contains(e.target))) {
+                opt.style.display='none';
+            }
+        });
+        // toggle dropdown display when clicking the header
+        function toggleOptions(id) {
+            var opt = document.getElementById(id);
+            opt.style.display = (opt.style.display==='block') ? 'none' : 'block';
+        }
+        // filter dropdown options based on search input
+        function filterOptions(inputId, optionsId) {
+            var filter = document.getElementById(inputId).value.toLowerCase();
+            document.querySelectorAll('#'+optionsId+' .option').forEach(function(o) {
+                o.style.display = o.innerText.toLowerCase().includes(filter) ? '' : 'none';
+            });
+        }
+        // on page load, hook up removal for any tags from last search
+        window.onload = function() {
+            document.querySelectorAll('#service-tags .tag').forEach(function(span) {
+                var id = span.getAttribute('data-id');
+                var hid = document.getElementById('services_' + id);
+                var x   = span.querySelector('.remove');
+                x.addEventListener('click', function(evt) {
+                    evt.stopPropagation();
+                    span.remove();
+                    hid.remove();
+                });
+            });
+        };
+    </script>
+    <script>
+        // providers array for autocomplete
+        var providers = {{ providers|tojson|safe }};
+    </script>
+</head>
+<body>
+    <h1>What Should I Watch?</h1>
+    <form method="post">
+        <!-- region dropdown -->
+        <label>Your Region:
+            <select name="region">
+            {% for c in countries %}
+                <option value="{{c.iso_3166_1}}"
+                    {% if request.form.region==c.iso_3166_1
+                       or (not request.form.region and c.iso_3166_1=='US') %}
+                       selected{% endif %}>
+                    {{c.english_name}} ({{c.iso_3166_1}})
+                </option>
+            {% endfor %}
+            </select>
+        </label><br><br>
+
+        <!-- services autocomplete search -->
+        <label>What streaming services do you have available?</label>
+        <div class="flex-row">
+            <div class="multiselect" style="position:relative; width:200px;">
+                <!-- search input -->
+                <input type="text" id="service-input"
+                       placeholder="Type to search services..."
+                       autocomplete="off"
+                       oninput="showServiceSuggestions()" onfocus="showServiceSuggestions()"
+                       style="width:100%; padding:5px; box-sizing:border-box;">
+                <!-- dropdown of suggestions -->
+                <div id="service-suggestions" class="options"></div>
+            </div>
+            <!-- selected tags go here -->
+            <div id="service-tags" class="flex-row">
+            {% for sid in request.form.getlist('services') %}
+                {% set prov = providers
+                   | selectattr('provider_id','equalto', sid|int)
+                   | first %}
+                <span class="tag" data-id="{{sid}}">
+                    {{prov.provider_name}}<span class="remove">&times;</span>
+                </span>
+                <input type="hidden" name="services" value="{{sid}}" id="services_{{sid}}">
+            {% endfor %}
+            </div>
+        </div>
+        <br><br>
+
+        <script>
+            // show matching services under the input
+            function showServiceSuggestions() {
+                var input = document.getElementById('service-input');
+                var filter = input.value.toLowerCase();
+                var sugBox = document.getElementById('service-suggestions');
+                sugBox.innerHTML = '';
+                // find providers that match and aren't already selected
+                providers.forEach(function(p) {
+                    if (p.provider_name.toLowerCase().includes(filter) && !isSelected(p.provider_id)) {
+                        var o = document.createElement('div');
+                        o.className = 'option';
+                        o.dataset.id = p.provider_id;
+                        o.innerText = p.provider_name;
+                        // when you click a suggestion, add its tag
+                        o.addEventListener('click', function() {
+                            addServiceTag(p.provider_id, p.provider_name);
+                            input.value = '';
+                            sugBox.style.display = 'none';
+                        });
+                        sugBox.appendChild(o);
+                    }
+                });
+                // only show if we have suggestions
+                sugBox.style.display = sugBox.children.length ? 'block' : 'none';
+            }
+
+            // check if a provider is already in tags
+            function isSelected(id) {
+                return document.getElementById('services_' + id) !== null;
+            }
+
+            // add the little tag + hidden input for a chosen service
+            function addServiceTag(id, name) {
+                var span = document.createElement('span');
+                span.className = 'tag';
+                span.innerText = name;
+                var x = document.createElement('span');
+                x.className = 'remove';
+                x.innerHTML = '&times;';
+                span.appendChild(x);
+                document.getElementById('service-tags').appendChild(span);
+
+                var hid = document.createElement('input');
+                hid.type = 'hidden';
+                hid.name = 'services';
+                hid.value = id;
+                hid.id = 'services_' + id;
+                document.forms[0].appendChild(hid);
+
+                x.addEventListener('click', function(evt) {
+                    evt.stopPropagation();
+                    span.remove();
+                    hid.remove();
+                });
+            }
+
+            // click outside should close suggestions
+            document.addEventListener('click', function(e) {
+                var box = document.getElementById('service-suggestions');
+                var inp = document.getElementById('service-input');
+                if (!box.contains(e.target) && e.target !== inp) {
+                    box.style.display = 'none';
+                }
+            });
+        </script>
+
+        <!-- genres checkboxes -->
+        <fieldset><legend>Genre:</legend>
+        {% for g in genres %}
+            <label><input type="radio" name="genre" value="{{g.id}}"
+                {% if request.form.genre==g.id|string %}checked{% endif %}>
+                {{g.name}}</label>
+        {% endfor %}
+        </fieldset><br>
+
+        <!-- rating dropdown -->
+        <label>Maximum Age Rating:
+            <select name="rating">
+                <option value="">Any</option>
+            {% for r in ['G','PG','PG-13','R','NC-17'] %}
+                <option value="{{r}}"
+                    {% if request.form.rating==r %}selected{% endif %}>
+                    {{r}}
+                </option>
+            {% endfor %}
+            </select>
+        </label><br><br>
+
+        <!-- decades radio -->
+        <label>Time Period:</label>
+        <fieldset><legend>Year From:</legend>
+        {% for d in decades %}
+            <label><input type="radio" name="start_decade" value="{{d}}"
+                {% if request.form.start_decade==d|string %}checked{% endif %}>
+                {{d}}s</label>
+        {% endfor %}
+        </fieldset>
+        <fieldset><legend>Year To:</legend>
+        {% for d in decades %}
+            <label><input type="radio" name="end_decade" value="{{d}}"
+                {% if request.form.end_decade==d|string %}checked{% endif %}>
+                {{d}}s</label>
+        {% endfor %}
+        </fieldset><br>
+
+        <!-- runtime radio -->
+        <fieldset><legend>Runtime Range:</legend>
+        {% for label, gte, lte in runtime_ranges %}
+            <label><input type="radio" name="runtime_range" value="{{label}}"
+                {% if request.form.runtime_range==label %}checked{% endif %}>
+                {{label}}</label>
+        {% endfor %}
+        </fieldset><br>
+
+        <!-- monetization checkbox -->
+        <label><input type="checkbox" name="pay_extra"
+            {% if request.form.get('pay_extra') %}checked{% endif %}>
+            Include Extra Charge Options?
+        </label><br><br>
+
+        <!-- foreign inclusion checkbox -->
+        <label><input type="checkbox" name="include_foreign"
+            {% if request.form.get('include_foreign') %}checked{% endif %}>
+            Include Foreign Films?
+        </label><br><br>
+
+        <button type="submit">Search</button>
+    </form>
+
+    {% if results %}
+        <h2>Results:</h2>
+        {% for svc, movies in results.items() %}
+            <h3>{{svc}}</h3>
+            {% if not movies %}
+                <p>No matches.</p>
+            {% else %}
+                <ul>
+                {% for m in movies %}
+                    <li>
+                        <img src="https://image.tmdb.org/t/p/w200{{m.poster_path}}"
+                             style="width:50px;vertical-align:middle;margin-right:5px;">
+                        {{m.title}} ({{m.release_date}})
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+        {% endfor %}
+    {% endif %}
+
+</body>
+</html>
