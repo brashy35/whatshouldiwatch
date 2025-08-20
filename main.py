@@ -2,7 +2,7 @@ from flask import Flask, request, render_template
 import requests
 import datetime
 
-API_KEY = "0c375599021fd8245b19396820829123"
+API_KEY = "YOUR_API_KEY_HERE"
 
 # telling Flask that templates live in the current directory.
 app = Flask(__name__, template_folder='.')
