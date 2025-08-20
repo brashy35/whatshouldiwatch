@@ -17,3 +17,11 @@ You only need Python 3 and Flask installed.
 2. Install dependencies:
    ```bash
    pip install flask requests
+   ```
+Get yourself a TMDB API key (free). Drop it into main.py as API_KEY.
+
+Run it
+```bash
+python main.py
+```
+Open your browser at http://localhost:5000
